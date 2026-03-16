@@ -30,7 +30,7 @@ void loop() {
     Serial.print(robot.step2.setpoint);
     Serial.print(",");
 
-    // Trục 3 (Lưu ý cái cuối cùng dùng println)
+    // Trục 3 
     Serial.print(robot.step3.goc);
     Serial.print(",");
     Serial.println(robot.step3.setpoint);
