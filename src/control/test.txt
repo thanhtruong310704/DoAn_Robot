@@ -1,0 +1,415 @@
+#include "debug.h"
+#include "control/controlrobot.h"
+
+ControlRobot ::ControlRobot(MotorStep& m1, MotorStep& m2, MotorStep& m3)
+    : step1(m1),
+      step2(m2),
+      step3(m3),
+      state(WAIT),
+      running_traj(false),
+      t_traj(0),
+      test(false) {}
+void ControlRobot :: init() {
+  step1.as5600begin();
+  step1.begin();
+  step2.as5600begin();
+  step2.begin();
+  step3.as5600begin();
+  step3.begin();
+  setupSetPoint();
+}
+
+
+void ControlRobot :: update(float denta_t) {
+  step1.goc = step1.readAngle();
+  step2.goc = step2.readAngle() -90 ;
+  step3.goc = -step3.readAngle() - step2.goc;
+  step1.output = step1.pid.outputPID(denta_t, step1.setpoint, step1.goc, step1.Kp, step1.Ki, step1.Kd);  //4.7, 0.001, 0.7
+  step2.output = step2.pid.outputPID(denta_t, step2.setpoint, step2.goc, step2.Kp, step2.Ki, step2.Kd);
+  step3.output = step3.pid.outputPID(denta_t, step3.setpoint, step3.goc, step3.Kp, step3.Ki, step3.Kd);
+}
+
+void ControlRobot :: getDataCV2() {
+  checkSerial();
+  planTrajectory();
+}
+
+
+void ControlRobot :: Run() {
+
+  step1.output = constrain(step1.output, -step1.step.maxSpeed(), step1.step.maxSpeed());
+  step1.step.setSpeed(-step1.output *5);
+  step2.output = constrain(step2.output, -step2.step.maxSpeed(), step2.step.maxSpeed());
+  step2.step.setSpeed(step2.output*5);
+  step3.output = constrain(step3.output, -step3.step.maxSpeed(), step3.step.maxSpeed());
+  step3.step.setSpeed(-step3.output*5);
+
+  if ((fabs(step1.output) > 1) and (fabs(step2.output) > 1) and (fabs(step2.output) > 1)){
+    step1.step.runSpeed();
+  }
+  else if ((fabs(step2.output) > 1) and (fabs(step2.output) > 1)) {
+    step2.step.runSpeed();
+    step3.step.runSpeed();
+  }
+
+  #ifdef DEBUG_OUT
+    Serial.print("q1: "); Serial.println(step1.pid.out);
+    Serial.print("q2: "); Serial.println(step2.pid.out);
+    Serial.print("q3: "); Serial.println(step3.pid.out);
+  #endif
+}
+
+void  ControlRobot :: setupSetPoint() {
+
+  step1.setpoint = step1.readAngle();
+  step2.setpoint = step2.readAngle() -90;
+  step3.setpoint = -step3.readAngle() - step2.setpoint ;
+
+}
+
+void ControlRobot :: checkSerial() {
+  if (Serial.available() > 0) {
+    String data = Serial.readStringUntil('\n');
+    data.trim();
+    int firstComma = data.indexOf(',');
+    int secondComma = data.indexOf(',', firstComma + 1);
+    if (firstComma > 0 && secondComma > 0) {
+      finish.x = data.substring(0, firstComma).toFloat();
+      finish.y = data.substring(firstComma + 1, secondComma).toFloat();
+      finish.z = data.substring(secondComma + 1).toFloat();
+    }
+    test=true;
+    #ifdef  DEBUG_CV2
+      Serial.print("x= ");
+      Serial.print(finish.x);
+      Serial.print(" y= ");
+      Serial.print(finish.y);
+      Serial.print(" z=");
+      Serial.println(finish.z);
+    #endif
+  }
+}
+
+
+void ControlRobot ::  planTrajectory(){
+  if (test) {
+    kinematic.IK(finish.x, finish.y, finish.z, step1.setpoint, step2.setpoint, step3.setpoint);
+    test = false;
+  }
+}
+
+
+main
+
+
+#include "debug.h"
+#include "config.h"
+
+ControlRobot robot(motor1, motor2, motor3);
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  Wire.setClock(400000);
+  robot.init();
+}
+
+void loop() {
+
+  robot.getDataCV2();
+  unsigned long now = micros();
+  if (now - last >= stepTime) {
+    delta_t = (now - last) / 1000000.0f;
+    last = now;
+    robot.update(delta_t);
+  }
+  robot.Run();
+
+  #ifdef DEBUG_ANGLE
+    Serial.print("q1: ");  Serial.print(robot.step1.goc);
+    Serial.print(" q2: "); Serial.print(robot.step2.goc);
+    Serial.print(" q3: "); Serial.println(robot.step3.goc);
+  #endif  
+  
+}
+
+
+
+
+
+
+#include "debug.h"
+#include "control/controlrobot.h"
+
+ControlRobot ::ControlRobot(MotorStep& m1, MotorStep& m2, MotorStep& m3)
+    : step1(m1),
+      step2(m2),
+      step3(m3),
+      state(WAIT),
+      running_traj(false),
+      t_traj(0),
+      test(false) {}
+void ControlRobot :: init() {
+  step1.as5600begin();
+  step1.begin();
+  step2.as5600begin();
+  step2.begin();
+  step3.as5600begin();
+  step3.begin();
+  setupSetPoint();
+}
+
+
+void ControlRobot :: update(float denta_t) {
+  step1.goc = step1.readAngle();
+  step2.goc = step2.readAngle() -90;
+  step3.goc = -step3.readAngle() - step2.goc;
+  step1.output = step1.pid.outputPID(denta_t, step1.setpoint, step1.goc, step1.Kp, step1.Ki, step1.Kd);  //4.7, 0.001, 0.7
+  step2.output = step2.pid.outputPID(denta_t, step2.setpoint, step2.goc, step2.Kp, step2.Ki, step2.Kd);
+  step3.output = step3.pid.outputPID(denta_t, step3.setpoint, step3.goc, step3.Kp, step3.Ki, step3.Kd);
+}
+//              khong gian descarte
+/* void ControlRobot :: checkSerial() {
+  if (Serial.available() > 0) {
+    String data = Serial.readStringUntil('\n');
+    data.trim();
+    int firstComma = data.indexOf(',');
+    int secondComma = data.indexOf(',', firstComma + 1);
+    if (firstComma > 0 && secondComma > 0) {
+      step1.qcur = data.substring(0, firstComma).toFloat();
+      step2.qcur = data.substring(firstComma + 1, secondComma).toFloat();
+      step3.qcur = data.substring(secondComma + 1).toFloat();
+    }
+    test = true;
+    Serial.print("goc 1:  ");
+    Serial.print(step1.qcur);
+    Serial.print("  goc 2:  ");
+    Serial.print(step2.qcur);
+    Serial.print("  goc 3:  ");
+    Serial.println(step3.qcur);
+  }
+} 
+void ControlRobot :: planTrajectory() {
+  if (test) startTrajectory();
+  if (!running_traj) {
+    // step1.setpoint = step1.goc;
+    // step2.setpoint = step2.goc;
+    // step3.setpoint = step3.goc;
+     return;
+  }
+  unsigned long now_time = millis();
+  t_traj = (now_time - traj_start_time) / 1000.0;
+  if (t_traj > TIME_TRAJ) {
+    t_traj = TIME_TRAJ;
+    running_traj = false;
+  }
+  step1.setpoint = trajX.getPosition3(t_traj);
+  step2.setpoint = trajY.getPosition3(t_traj);
+  step3.setpoint = trajZ.getPosition3(t_traj);
+} 
+
+void ControlRobot :: startTrajectory() {
+  test = false;
+  float q1Cur = step1.readAngle(-1) / step1.tst;
+  float q2Cur = step2.readAngle(-1) / step2.tst -90 ;
+  float q3Cur = -step3.readAngle(-1) / step3.tst -(step2.readAngle(-1) / step2.tst) +90;
+  getMaxTime(q1Cur, q2Cur, q3Cur);
+  trajX.cubicTrajectory(q1Cur, step1.qcur, step1.v0, step1.vf, TIME_TRAJ);
+  trajY.cubicTrajectory(q2Cur, step2.qcur, step2.v0, step2.vf, TIME_TRAJ);
+  trajZ.cubicTrajectory(q3Cur, step3.qcur, step3.v0, step3.vf, TIME_TRAJ);
+  Serial.print("thời gian thuc hien la: ");
+  Serial.println(TIME_TRAJ);
+  step1.pid.reset();
+  step2.pid.reset();
+  step3.pid.reset();
+  traj_start_time = millis();
+  running_traj = true;
+} 
+
+void ControlRobot :: update() {
+  dt = (10) / 1000.0;
+  step1.goc = step1.readAngle(-1);
+  step2.goc = step2.readAngle(-1);
+  step3.goc = step3.readAngle(-1);
+  step1.output = step1.pid.outputPID(dt, step1.tst, step1.setpoint, step1.goc, step1.Kp, step1.Ki, step1.Kd);
+  step2.output = step2.pid.outputPID(dt, step2.tst, step2.setpoint, step2.goc, step2.Kp, step2.Ki, step2.Kd);
+  step3.output = step3.pid.outputPID(dt, step3.tst, step3.setpoint, step3.goc, step3.Kp, step3.Ki, step3.Kd);
+  // step1.caclu_pid(dt);
+  // step2.caclu_pid(dt);
+  // step3.caclu_pid(dt);
+} */
+
+
+void ControlRobot :: getMaxTime(float q1Cur, float q2Cur, float q3Cur) {
+
+  /* step1.time = trajX.getTime(q1Cur, step1.qcur, 450, 2);
+  step2.time = trajY.getTime(q2Cur, step2.qcur, 450, 2);
+  step3.time = trajZ.getTime(q3Cur, step3.qcur, 450, 2); */
+
+  step1.time = trajX.getTime(start.x, finish.x, 450, 1.50);
+  step2.time = trajY.getTime(start.y, finish.y, 450,1.50);
+  step3.time = trajZ.getTime(start.z, finish.z, 450, 1.50);
+
+  TIME_TRAJ = step1.time;
+  if (step2.time > TIME_TRAJ) TIME_TRAJ = step2.time;
+  if (step3.time > TIME_TRAJ) TIME_TRAJ = step3.time;
+  if (TIME_TRAJ < 0.5) TIME_TRAJ = 0.5;
+  #ifdef  DEBUG_TIME
+    Serial.print("Thoi gian quy haoch: ");
+    Serial.println(TIME_TRAJ);
+  #endif
+}
+
+
+
+void ControlRobot :: getDataCV2() {
+  checkSerial();
+  planTrajectory();
+}
+
+void ControlRobot :: Run() {
+
+  step1.output = constrain(step1.output, -step1.step.maxSpeed(), step1.step.maxSpeed());
+ // step1.step.setSpeed(-step1.output *5);
+  step2.output = constrain(step2.output, -step2.step.maxSpeed(), step2.step.maxSpeed());
+  //step2.step.setSpeed(step2.output*5);
+  step3.output = constrain(step3.output, -step3.step.maxSpeed(), step3.step.maxSpeed());
+ // step3.step.setSpeed(-step3.output*5);
+
+/*   if ((fabs(step1.output) > 1) and (fabs(step2.output) > 1) and (fabs(step2.output) > 1)){
+    step1.step.runSpeed();
+  }
+  else if ((fabs(step2.output) > 1) and (fabs(step2.output) > 1)) {
+    step2.step.runSpeed();
+    step3.step.runSpeed();
+  } */
+  bool step1_is_busy = (abs(step1.output)) > 2;
+  if (step1_is_busy) {
+    step1.step.setSpeed(-step1.output * 5); 
+
+    step2.step.setSpeed(0);
+    step3.step.setSpeed(0);
+  } 
+  else {
+
+    if (abs(step1.output) > 1.0) step1.step.setSpeed(-step1.output * 5);
+    else step1.step.setSpeed(0);
+
+    step2.step.setSpeed(step2.output * 5);
+    step3.step.setSpeed(-step3.output * 5);
+  }
+  step1.step.runSpeed();
+  step2.step.runSpeed();
+  step3.step.runSpeed();
+  #ifdef DEBUG_OUT
+    Serial.print("q1: "); Serial.println(step1.pid.out);
+    Serial.print("q2: "); Serial.println(step2.pid.out);
+    Serial.print("q3: "); Serial.println(step3.pid.out);
+  #endif
+}
+
+void ControlRobot :: setZeroo(MotorStep& m) { m.setZero(); }
+
+// test
+
+/* void ControlRobot ::check() {
+  if (Serial.available() > 0) {
+    String data = Serial.readStringUntil('\n');
+    data.trim();
+    int firstComma = data.indexOf(',');
+    int secondComma = data.indexOf(',', firstComma + 1);
+    if (firstComma > 0 && secondComma > 0) {
+      step1.setpoint = data.substring(0, firstComma).toFloat();
+      step2.setpoint = data.substring(firstComma + 1, secondComma).toFloat();
+      step3.setpoint = data.substring(secondComma + 1).toFloat();
+    }
+  }
+} */
+
+
+void  ControlRobot :: setupSetPoint() {
+
+  step1.setpoint = step1.readAngle();
+  step2.setpoint = step2.readAngle() -90;
+  step3.setpoint = -step3.readAngle() - step2.setpoint ;
+
+}
+
+
+// Toa do
+void ControlRobot :: checkSerial() {
+  if (Serial.available() > 0) {
+    String data = Serial.readStringUntil('\n');
+    data.trim();
+    int firstComma = data.indexOf(',');
+    int secondComma = data.indexOf(',', firstComma + 1);
+    if (firstComma > 0 && secondComma > 0) {
+      finish.x = data.substring(0, firstComma).toFloat();
+      finish.y = data.substring(firstComma + 1, secondComma).toFloat();
+      finish.z = data.substring(secondComma + 1).toFloat();
+    }
+    test=true;
+    #ifdef  DEBUG_CV2
+      Serial.print("x= ");
+      Serial.print(finish.x);
+      Serial.print(" y= ");
+      Serial.print(finish.y);
+      Serial.print(" z=");
+      Serial.println(finish.z);
+    #endif
+  }
+} 
+//               khong gian khop
+/*  void ControlRobot :: startTrajectory() {
+
+  float q1Cur = step1.readAngle();
+  float q2Cur = step2.readAngle();
+  float q3Cur = -step3.readAngle() - q2Cur;
+  kinematic.FK(start.x, start.y, start.z, q1Cur,q2Cur, q3Cur);
+  getMaxTime(start.x, start.y, start.z);
+  trajX.cubicTrajectory(start.x, finish.x, step1.v0, step1.vf, TIME_TRAJ);
+  trajY.cubicTrajectory(start.y, finish.y, step2.v0, step2.vf, TIME_TRAJ);
+  trajZ.cubicTrajectory(start.z, finish.z, step3.v0, step3.vf, TIME_TRAJ);
+  Serial.print("thời gian thuc hien la: ");
+  Serial.println(TIME_TRAJ);
+  step1.pid.reset();
+  step2.pid.reset();
+  step3.pid.reset();
+  traj_start_time = millis();
+  running_traj = true; 
+  test=false;
+
+} */ 
+
+ 
+/* void ControlRobot :: planTrajectory(){
+  if (test) startTrajectory();
+  if (!running_traj) {
+    //  step1.setpoint = step1.goc;
+    //  step2.setpoint = step2.goc;
+    //  step3.setpoint = step3.goc;
+     return;
+  }
+  unsigned long now_time = millis();
+  t_traj = (now_time - traj_start_time) / 1000.0;
+  if (t_traj > TIME_TRAJ) {
+    t_traj = TIME_TRAJ;
+    running_traj = false;
+  }
+  cur.x = trajX.getPosition3(t_traj);
+  cur.y = trajY.getPosition3(t_traj);
+  cur.z = trajZ.getPosition3(t_traj);
+  kinematic.IK(cur.x, cur.y, cur.z, step1.setpoint, step2.setpoint, step3.setpoint);
+  // Serial.print(step1.setpoint);
+  // Serial.print("   ");
+  // Serial.print(step2.setpoint);
+  // Serial.print("   ");
+  // Serial.println(step3.setpoint); 
+}  */
+
+void ControlRobot ::  planTrajectory(){
+  if (test) {
+    kinematic.IK(finish.x, finish.y, finish.z, step1.setpoint, step2.setpoint, step3.setpoint);
+    test = false;
+  }
+}
